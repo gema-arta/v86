@@ -1237,7 +1237,7 @@ CPU.prototype.cycle = function()
     this.cycle_internal();
 };
 
-CPU.prototype.codegen_finalize = function(wasm_table_index, start, state_flags, ptr, len)
+CPU.prototype.codegen_finalize = async function(wasm_table_index, start, state_flags, ptr, len)
 {
     ptr >>>= 0;
     len >>>= 0;
@@ -1293,7 +1293,7 @@ CPU.prototype.codegen_finalize = function(wasm_table_index, start, state_flags, 
         const result = new WebAssembly.Instance(module, { "e": this.jit_imports });
         const f = result.exports["f"];
 
-        this.codegen_finalize_finished(wasm_table_index, start, state_flags);
+        await this.codegen_finalize_finished(wasm_table_index, start, state_flags);
 
         this.wm.wasm_table.set(wasm_table_index + WASM_TABLE_OFFSET, f);
 
@@ -1305,7 +1305,8 @@ CPU.prototype.codegen_finalize = function(wasm_table_index, start, state_flags, 
         return;
     }
 
-    const result = WebAssembly.instantiate(code, { "e": this.jit_imports }).then(result => {
+    try{
+        const result = await WebAssembly.instantiate(code, { "e": this.jit_imports });
         const f = result.instance.exports["f"];
 
         this.codegen_finalize_finished(wasm_table_index, start, state_flags);
@@ -1316,15 +1317,12 @@ CPU.prototype.codegen_finalize = function(wasm_table_index, start, state_flags, 
         {
             this.test_hook_did_finalize_wasm(code);
         }
-    });
-
-    if(DEBUG)
-    {
-        result.catch(e => {
-            console.log(e);
-            debugger;
-            throw e;
-        });
+    }catch(err){
+        if (DEBUG){
+            console.log(err);
+            debugger;   
+            throw err;
+        }
     }
 };
 
