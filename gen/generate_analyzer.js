@@ -212,10 +212,51 @@ function gen_instruction_body_after_prefix(encodings, size)
     }
 }
 
+function generate_flags_info(encoding,instruction_postfix)
+
+{        
+    if (encoding.modified_flags==undefined  && encoding.tested_flags==undefined) {
+        instruction_postfix.push("analysis.has_flags_info = false;");
+        instruction_postfix.push("analysis.tested_flags = 0;");
+        instruction_postfix.push("analysis.modified_flags = 0;");
+    }
+    else {
+        instruction_postfix.push("analysis.has_flags_info = true;");       
+        if (encoding.tested_flags)
+            instruction_postfix.push("analysis.tested_flags = " + encoding.tested_flags + ";");                    
+        else
+            instruction_postfix.push("analysis.tested_flags = 0;");
+        if (encoding.modified_flags)
+            instruction_postfix.push("analysis.modified_flags = " + encoding.modified_flags + ";");
+        else
+            instruction_postfix.push("analysis.modified_flags = 0;");
+    }
+}
+
+function patch_flags_info(encoding,instruction_postfix)
+
+{    
+    let all_flags = 1 << 6 | 1 << 11 | 1 << 0 | 1 << 4 | 1 << 2 | 1 << 7;
+    let opcode_lea = 0x8D;
+
+    if (encoding.opcode != opcode_lea)
+        instruction_postfix. push ( {
+            type: "if-else",
+            if_blocks: [{
+                condition: "modrm_byte < 0xC0",
+                body: [].concat(
+                    "analysis.tested_flags = " + all_flags + ";"
+                ),
+            }]
+        });    
+}
+
 function gen_instruction_body_after_fixed_g(encoding, size)
 {
     const imm_read = gen_read_imm_call(encoding, size);
     const instruction_postfix = [];
+
+    generate_flags_info(encoding,instruction_postfix);
 
     if(encoding.custom_sti) {
         instruction_postfix.push("analysis.ty = ::analysis::AnalysisType::STI;");
@@ -281,6 +322,9 @@ function gen_instruction_body_after_fixed_g(encoding, size)
         }
         else
         {
+            // instruction accesses mem so it might generate an exception, we need to make sure all flags can be computed             
+            patch_flags_info(encoding,instruction_postfix);
+
             return [].concat(
                 {
                     type: "if-else",
